@@ -1,111 +1,110 @@
-import psycopg2
-from datetime import datetime
+import pandas as pd
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from config import connect_databases
 
-def entregasPorDia():
-    # Conexión a la base de datos origen y destino
 
-    def connect_to_db(database_name):
-        return psycopg2.connect(
-            host="localhost",
-            database=database_name,
-            user="Dani",
-            password="invitado",
-            options="-c client_encoding=UTF8"
-        )
 
-    conn_origen = connect_to_db("rapidosyfuriosos")
-    cur_origen = conn_origen.cursor()
+def entregaPorEstado():
+    db_op, db_etl = connect_databases()
 
-    # Consultar los datos necesarios de la base de datos de origen
-    query = """
-        SELECT 
-            ms.id AS key_servicio,
-            cu.cliente_id AS key_cliente,
-            cu.ciudad_id AS key_ciudad,
-            cu.sede_id AS key_sede,
-            ms.fecha_solicitud AS key_fecha,
-            es_inicio.fecha AS fecha_iniciado,
-            es_inicio.hora AS hora_iniciado,
-            es_terminado.fecha AS fecha_terminado,
-            es_terminado.hora AS hora_terminado
-        FROM 
-            mensajeria_servicio ms
-        JOIN clientes_usuarioaquitoy cu ON ms.usuario_id = cu.id
-        LEFT JOIN mensajeria_estadosservicio es_inicio ON ms.id = es_inicio.servicio_id AND es_inicio.estado_id = 1
-        LEFT JOIN mensajeria_estadosservicio es_terminado ON ms.id = es_terminado.servicio_id AND es_terminado.estado_id = 6
-        WHERE 
-            ms.activo = true;
-    """
 
-    # Ejecutar la consulta
-    cur_origen.execute(query)
 
-    # Obtener todos los registros
-    resultados = cur_origen.fetchall()
+    #Extract
 
-    # Verificar si 'resultados' contiene datos
-    if not resultados:
-        print("No se encontraron registros.")
-    else:
-        print(f"Se encontraron {len(resultados)} registros.")
 
-    # Conexión a la base de datos destino
-    conn_destino = connect_to_db("etl")
-    cur_destino = conn_destino.cursor()
+    ###mensajeria_estado???
+    ##mensajeria_estadoservicio
+    ##mensajeria_tiposervicio????
+    ##mensajeria_servicio
 
-    # Crear la tabla de hechos 'entregas_completadas_por_dia'
-    create_table_query = """
-    CREATE TABLE IF NOT EXISTS entregas_completadas_por_dia (
-        key_servicio INTEGER,
-        key_cliente INTEGER,
-        key_ciudad INTEGER,
-        key_sede INTEGER,
-        key_fecha DATE,
-        tiempo_entrega INTERVAL
-    );
-    """
 
-    # Ejecutar la creación de la tabla
-    cur_destino.execute(create_table_query)
+    mensajeria_estado =  pd.read_sql_query('SELECT * FROM public.mensajeria_estado', db_op)
+    mensajeria_estadosservicio =  pd.read_sql_query('SELECT * FROM public.mensajeria_estadosservicio', db_op)
+    mensajeria_tiposervicio =  pd.read_sql_query('SELECT * FROM public.mensajeria_tiposervicio', db_op)
+    mensajeria_servicio =  pd.read_sql_query('SELECT * FROM public.mensajeria_servicio', db_op)
+    mensajeria_usuarioaquitoy = pd.read_sql_query( 'SELECT * FROM public.clientes_usuarioaquitoy' ,db_op)
+    sede= pd.read_sql_query( 'SELECT * FROM public.sede' ,db_op)
 
-    # Insertar los registros obtenidos
-    insert_query = """
-    INSERT INTO entregas_completadas_por_dia (
-        key_servicio, key_cliente, key_ciudad, key_sede, key_fecha, tiempo_entrega
+
+
+    ###drops
+    mensajeria_estadosservicio=mensajeria_estadosservicio[['id'
+                                                        ,'fecha','hora',
+                                                        'estado_id','servicio_id'
+                                                        ]]
+    mensajeria_servicio=mensajeria_servicio[['id','cliente_id','mensajero_id',
+                                            'tipo_servicio_id']]
+    mensajeria_tiposervicio=mensajeria_tiposervicio[['id', 'nombre',]]
+    mensajeria_estado=mensajeria_estado[['id','nombre']]
+
+
+
+    mensajeria_usuarioaquitoy=mensajeria_usuarioaquitoy[['id','cliente_id','sede_id','ciudad_id']]
+    sede= sede[['sede_id','nombre']]
+
+    ####renames
+    mensajeria_tiposervicio = mensajeria_tiposervicio.rename(columns={'id': 'tipo_servicio_id','nombre': 'tipo_servicio'})
+    mensajeria_servicio= mensajeria_servicio.rename(columns={'id': 'servicio_id'})
+    mensajeria_estadosservicio=mensajeria_estadosservicio.rename(columns={'id':'estadosservicios_id'})
+    mensajeria_estado=mensajeria_estado.rename(columns={'id':'estado_id','nombre': 'estado_nombre'})
+    mensajeria_usuarioaquitoy=mensajeria_usuarioaquitoy.rename(columns={'id':'usuarioaquitoy_id'})
+    sede=sede.rename(columns={'nombre':'sede'})
+
+
+    facttable=mensajeria_estadosservicio.merge(
+        mensajeria_servicio,
+        left_on='servicio_id',
+        right_on='servicio_id',
+        how='left')
+
+    facttable=facttable.merge(
+        mensajeria_tiposervicio,
+        left_on='tipo_servicio_id',
+        right_on='tipo_servicio_id',
+        how='left'   
     )
-    VALUES (%s, %s, %s, %s, %s, %s);
-    """
 
-    # Preparar y ejecutar la inserción de datos
-    for row in resultados:
-        # Obtener la fecha y hora de "Iniciado" y "Terminado"
-        fecha_iniciado = row[5]  # Fecha de "Iniciado"
-        hora_iniciado = row[6]  # Hora de "Iniciado"
-        fecha_terminado = row[7]  # Fecha de "Terminado"
-        hora_terminado = row[8]  # Hora de "Terminado"
+    facttable=facttable.merge(
+        mensajeria_estado,
+        left_on='estado_id',
+        right_on='estado_id',
+        how='left'
+    )
 
-        # Comprobar si ambas, fecha y hora, existen para "Iniciado" y "Terminado"
-        if fecha_iniciado and hora_iniciado and fecha_terminado and hora_terminado:
-            # Combinar las fechas y horas para obtener los tiempos completos
-            tiempo_iniciado = datetime.combine(fecha_iniciado, hora_iniciado)
-            tiempo_terminado = datetime.combine(fecha_terminado, hora_terminado)
 
-            # Calcular la diferencia entre el tiempo de "Terminado" y "Iniciado"
-            tiempo_entrega = tiempo_terminado - tiempo_iniciado
-        else:
-            # Si no se tiene la fecha y hora, asignamos 'NULL' (puede depender del comportamiento deseado)
-            tiempo_entrega = None
 
-        # Ejecutar la inserción
-        cur_destino.execute(insert_query, (row[0], row[1], row[2], row[3], row[4], tiempo_entrega))
+    facttable=facttable.rename(columns={'estadosservicios_id':'id'})
+    facttable=facttable[['id','servicio_id','mensajero_id',
+                        'tipo_servicio','estado_nombre',
+                        'fecha','hora','cliente_id']]
 
-    # Confirmar los cambios en la base de datos destino
-    conn_destino.commit()
+    '''mensajeria_usuarioaquitoy=mensajeria_usuarioaquitoy.merge(
+        sede,
+        left_on='sede_id',
+        right_on='sede_id',
+        how='left'
+    )
 
-    # Cerrar las conexiones
-    cur_origen.close()
-    conn_origen.close()
-    cur_destino.close()
-    conn_destino.close()
+    facttable=facttable.merge(
+        mensajeria_usuarioaquitoy,
+        left_on='cliente_id',
+        right_on='cliente_id',
+        how='left'
+    )
 
-    print("Datos transferidos con éxito.") 
+
+    facttable=facttable[['id','servicio_id','mensajero_id',
+                        'tipo_servicio','estado_nombre',
+                        'fecha','hora','cliente_id','sede_id','ciudad_id']]
+
+    '''
+    print(facttable.columns)
+
+    #usuarioaquitoy
+
+
+
+    facttable.to_sql('Fact_entrega_estados', db_etl, if_exists='replace', index=False)
+
