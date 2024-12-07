@@ -1,109 +1,53 @@
-import psycopg2
-from datetime import datetime
+import pandas as pd
+from config import connect_databases
 
-def entregasPorDia():
-    # Conexión a la base de datos origen y destino
-    def connect_to_db(database_name):
-        return psycopg2.connect(
-            host="localhost",
-            database=database_name,
-            user="alejandro",
-            password="Alejo1193",
-            options="-c client_encoding=UTF8"
-        )
+def entregasPordia():
+    db_op, db_etl = connect_databases()
+    query = """
+        SELECT 
+            ms.id AS key_servicio,
+            cu.cliente_id AS key_cliente,
+            cu.ciudad_id AS key_ciudad,
+            cu.sede_id AS key_sede,
+            ms.fecha_solicitud AS key_fecha,
+            es_inicio.fecha AS fecha_iniciado,
+            es_inicio.hora AS hora_iniciado,
+            es_terminado.fecha AS fecha_terminado,
+            es_terminado.hora AS hora_terminado
+        FROM 
+            mensajeria_servicio ms
+        JOIN clientes_usuarioaquitoy cu ON ms.usuario_id = cu.id
+        LEFT JOIN mensajeria_estadosservicio es_inicio ON ms.id = es_inicio.servicio_id AND es_inicio.estado_id = 1
+        LEFT JOIN mensajeria_estadosservicio es_terminado ON ms.id = es_terminado.servicio_id AND es_terminado.estado_id = 6
+        WHERE 
+            ms.activo = true;
+    """
+    # Extraer datos
+    entregas = pd.read_sql_query(query, db_op)
 
-    try:
-        conn_origen = connect_to_db("rapidosyfuriosos")
-        cur_origen = conn_origen.cursor()
+    # Convertir fechas y horas a formatos manejables, manejando valores nulos
+    entregas['fecha_iniciado'] = pd.to_datetime(entregas['fecha_iniciado'], errors='coerce')
+    entregas['fecha_terminado'] = pd.to_datetime(entregas['fecha_terminado'], errors='coerce')
 
-        # Consultar los datos necesarios de la base de datos de origen
-        query = """
-            SELECT 
-                ms.id AS key_servicio,
-                cu.cliente_id AS key_cliente,
-                cu.ciudad_id AS key_ciudad,
-                cu.sede_id AS key_sede,
-                ms.fecha_solicitud AS key_fecha,
-                es_inicio.fecha AS fecha_iniciado,
-                es_inicio.hora AS hora_iniciado,
-                es_terminado.fecha AS fecha_terminado,
-                es_terminado.hora AS hora_terminado
-            FROM 
-                mensajeria_servicio ms
-            JOIN clientes_usuarioaquitoy cu ON ms.usuario_id = cu.id
-            LEFT JOIN mensajeria_estadosservicio es_inicio ON ms.id = es_inicio.servicio_id AND es_inicio.estado_id = 1
-            LEFT JOIN mensajeria_estadosservicio es_terminado ON ms.id = es_terminado.servicio_id AND es_terminado.estado_id = 6
-            WHERE 
-                ms.activo = true;
-        """
+    def safe_to_timedelta(col):
+        return pd.to_timedelta(col, errors='coerce')
 
-        # Ejecutar la consulta
-        cur_origen.execute(query)
-        resultados = cur_origen.fetchall()
+    entregas['hora_iniciado'] = safe_to_timedelta(entregas['hora_iniciado'].astype(str))
+    entregas['hora_terminado'] = safe_to_timedelta(entregas['hora_terminado'].astype(str))
 
-        if not resultados:
-            print("No se encontraron registros.")
-        else:
-            print(f"Se encontraron {len(resultados)} registros.")
+    # Calcular tiempo de entrega y convertir a segundos
+    entregas['tiempo_entrega'] = entregas.apply(
+        lambda row: (
+            (row['fecha_terminado'] + row['hora_terminado']) - 
+            (row['fecha_iniciado'] + row['hora_iniciado'])
+        ).total_seconds() if pd.notnull(row['fecha_iniciado']) and pd.notnull(row['hora_iniciado']) and
+                            pd.notnull(row['fecha_terminado']) and pd.notnull(row['hora_terminado']) else None,
+        axis=1
+    )
 
-        # Conexión a la base de datos destino
-        conn_destino = connect_to_db("etl")
-        cur_destino = conn_destino.cursor()
+    # Seleccionar columnas necesarias
+    entregas = entregas[['key_servicio', 'key_cliente', 'key_ciudad', 'key_sede', 'key_fecha', 'tiempo_entrega']]
 
-        # Crear la tabla de hechos 'entregas_completadas_por_dia'
-        create_table_query = """
-        CREATE TABLE IF NOT EXISTS entregas_completadas_por_dia (
-            key_servicio INTEGER,
-            key_cliente INTEGER,
-            key_ciudad INTEGER,
-            key_sede INTEGER,
-            key_fecha DATE,
-            tiempo_entrega INTERVAL
-        );
-        """
-        print("Creando la tabla de hechos...")
-        cur_destino.execute(create_table_query)
-
-        # Insertar los registros obtenidos
-        insert_query = """
-        INSERT INTO entregas_completadas_por_dia (
-            key_servicio, key_cliente, key_ciudad, key_sede, key_fecha, tiempo_entrega
-        )
-        VALUES (%s, %s, %s, %s, %s, %s);
-        """
-
-        for row in resultados:
-            try:
-                fecha_iniciado = row[5]  # Fecha de "Iniciado"
-                hora_iniciado = row[6]  # Hora de "Iniciado"
-                fecha_terminado = row[7]  # Fecha de "Terminado"
-                hora_terminado = row[8]  # Hora de "Terminado"
-
-                if fecha_iniciado and hora_iniciado and fecha_terminado and hora_terminado:
-                    tiempo_iniciado = datetime.combine(fecha_iniciado, hora_iniciado)
-                    tiempo_terminado = datetime.combine(fecha_terminado, hora_terminado)
-                    tiempo_entrega = tiempo_terminado - tiempo_iniciado
-                else:
-                    tiempo_entrega = None
-
-                cur_destino.execute(insert_query, (row[0], row[1], row[2], row[3], row[4], tiempo_entrega))
-
-            except Exception as e:
-                print(f"Error al insertar el registro {row[0]}: {e}")
-
-        conn_destino.commit()
-        print("Datos transferidos con éxito.")
-
-    except Exception as e:
-        print(f"Error durante la ejecución: {e}")
-    finally:
-        # Cerrar las conexiones
-        if conn_origen:
-            cur_origen.close()
-            conn_origen.close()
-        if conn_destino:
-            cur_destino.close()
-            conn_destino.close()
-
-# Llamar a la función
-entregasPorDia()
+    # Cargar en la base de datos
+    entregas.to_sql('FactEntregasPorDia', db_etl, if_exists='replace', index=False)
+    print("FactEntregasPorDia cargado correctamente.")
