@@ -13,11 +13,11 @@ def cargar_dim_fecha():
         __tablename__ = 'DimFecha'  # Nombre de la tabla
 
         fecha_id = Column(Integer, primary_key=True, autoincrement=True)  # ID autoincremental
-        fecha = Column(Date, nullable=False)  # Columna de fecha
-        hora = Column(Time, nullable=False)  # Columna de hora
+        fecha = Column(Date)  # Columna de fecha
+        hora = Column(Time)  # Columna de hora
         dia_semana= Column(String)
         mes = Column(String)
-    
+
     base.metadata.create_all(db_etl)
     # Crear un DataFrame vacío con las columnas deseadas
     #fecha = pd.DataFrame(columns=['fecha_id', 'fecha', 'hora'])
