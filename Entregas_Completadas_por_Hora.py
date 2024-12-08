@@ -25,7 +25,7 @@ def entregasPorHora():
     # Extraer datos
     entregas = pd.read_sql_query(query, db_op)
 
-    # Convertir fechas y horas a formatos manejables, manejando valores nulos
+    # Convertir fechas y horas a formatos manejables
     entregas['fecha_iniciado'] = pd.to_datetime(entregas['fecha_iniciado'], errors='coerce')
     entregas['fecha_terminado'] = pd.to_datetime(entregas['fecha_terminado'], errors='coerce')
 
@@ -45,12 +45,21 @@ def entregasPorHora():
         axis=1
     )
 
-    # Verificar y convertir todas las columnas de tipo timedelta a segundos
-    for col in entregas.select_dtypes(include=['timedelta']):
-        entregas[col] = entregas[col].dt.total_seconds()
+    # Extraer hora (0-23) de hora_iniciado
+    entregas['hora'] = entregas['hora_iniciado'].dt.seconds // 3600
+
+    # Calcular entregas completadas por hora
+    entregas_completadas_hora = (
+        entregas.groupby(['key_fecha', 'hora'])
+        .size()
+        .reset_index(name='entregas_completadas_hora')
+    )
+
+    # Unir datos con entregas completadas por hora
+    entregas = entregas.merge(entregas_completadas_hora, on=['key_fecha', 'hora'], how='left')
 
     # Seleccionar columnas necesarias
-    entregas = entregas[['key_servicio', 'key_cliente', 'key_ciudad', 'key_sede', 'key_fecha', 'hora_iniciado', 'tiempo_entrega']]
+    entregas = entregas[['key_servicio', 'key_cliente', 'key_ciudad', 'key_sede', 'key_fecha', 'hora', 'entregas_completadas_hora', 'tiempo_entrega']]
 
     # Cargar en la base de datos
     entregas.to_sql('FactEntregasPorHora', db_etl, if_exists='replace', index=False)
