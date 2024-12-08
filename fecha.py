@@ -1,36 +1,27 @@
-import psycopg2
-from datetime import datetime
+import pandas as pd
+from config import connect_databases
+from sqlalchemy import create_engine, Column, Integer, Date, Time
+from sqlalchemy.ext.declarative import declarative_base
+import sqlalchemy
 
-# Conexión a la base de datos
-def connect_to_db(dbname):
-    return psycopg2.connect(
-        host="localhost",
-        dbname=dbname,
-        user="alejandro",
-        password="Alejo1193"
-    )
+def cargar_dim_fecha():
+    db_op, db_etl = connect_databases()
 
-# Conectar a la base de datos de destino
-conn_destino = connect_to_db("etl")
-cur_destino = conn_destino.cursor()
+    base=sqlalchemy.orm.declarative_base()
 
-# Crear la tabla de dimensión 'fecha_hora' (almacena fechas y horas)
-create_dim_fecha_query = """
-CREATE TABLE IF NOT EXISTS fecha_hora (
-    key_fecha_hora SERIAL PRIMARY KEY,
-    fecha DATE,
-    hora TIME
-);
-"""
+    class FechaHora(base):
+        __tablename__ = 'DimFecha'  # Nombre de la tabla
 
-# Ejecutar la creación de la tabla
-cur_destino.execute(create_dim_fecha_query)
+        fecha_id = Column(Integer, primary_key=True, autoincrement=True)  # ID autoincremental
+        fecha = Column(Date, nullable=False)  # Columna de fecha
+        hora = Column(Time, nullable=False)  # Columna de hora
 
-# Confirmar los cambios
-conn_destino.commit()
+    base.metadata.create_all(db_etl)
+    # Crear un DataFrame vacío con las columnas deseadas
+    #fecha = pd.DataFrame(columns=['fecha_id', 'fecha', 'hora'])
+    
+    # Insertar la tabla en la base de datos
+    #fecha.to_sql('DimFecha', db_etl, if_exists='replace', index=False)
 
-# Cerrar la conexión
-cur_destino.close()
-conn_destino.close()
-
-print("Dimensión fecha_hora creada con éxito.")
+    
+    print("DimFecha cargado correctamente.")
