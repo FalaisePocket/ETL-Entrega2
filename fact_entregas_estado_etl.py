@@ -24,14 +24,23 @@ def entregaPorEstado():
     fact_table = fact_table[['estados_servicio_id', 'servicio_id', 'tipo_servicio', 'estado_nombre', 'fecha', 'hora']]
     
     ######insertar fecha y hora en la dimension
-    fecha_hora=fact_table[['fecha','hora']]
+    fecha_hora=fact_table[['fecha','hora']].copy()
+    # Asegurarse de que la columna 'fecha' sea de tipo datetime
+    fecha_hora['fecha'] = pd.to_datetime(fecha_hora['fecha'])
+
+    # Añadir columna 'dia_semana' con el nombre del día
+    fecha_hora['dia_semana'] = fecha_hora['fecha'].dt.day_name()
+
+    # Añadir columna 'mes' con el nombre del mes
+    fecha_hora['mes'] = fecha_hora['fecha'].dt.month_name()
+
     fecha_hora.to_sql('DimFecha',db_etl,if_exists='append', index=False)
 
 
     fecha_hora_con_ids = pd.read_sql('SELECT * FROM public."DimFecha"', db_etl)
 
     fact_table= fact_table.merge(fecha_hora_con_ids, on=['fecha','hora'],how='left')
-    fact_table=fact_table.drop(columns=['fecha','hora'])
+    fact_table=fact_table.drop(columns=['fecha','hora','dia_semana','mes'])
     
 
     result = fact_table.pivot_table(

@@ -1,6 +1,6 @@
 import pandas as pd
 from config import connect_databases
-from sqlalchemy import create_engine, Column, Integer, Date, Time
+from sqlalchemy import create_engine, Column, Integer, Date, Time, String
 from sqlalchemy.ext.declarative import declarative_base
 import sqlalchemy
 
@@ -15,7 +15,9 @@ def cargar_dim_fecha():
         fecha_id = Column(Integer, primary_key=True, autoincrement=True)  # ID autoincremental
         fecha = Column(Date, nullable=False)  # Columna de fecha
         hora = Column(Time, nullable=False)  # Columna de hora
-
+        dia_semana= Column(String)
+        mes = Column(String)
+    
     base.metadata.create_all(db_etl)
     # Crear un DataFrame vacío con las columnas deseadas
     #fecha = pd.DataFrame(columns=['fecha_id', 'fecha', 'hora'])
