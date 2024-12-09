@@ -20,8 +20,8 @@ def entregaPorEstado():
     fact_table = estados_servicio.merge(servicio, on='servicio_id', how='left')
     fact_table = fact_table.merge(tipo_servicio, on='tipo_servicio_id', how='left')
     fact_table = fact_table.merge(estado, on='estado_id', how='left')
-
-    fact_table = fact_table[['estados_servicio_id', 'servicio_id', 'tipo_servicio', 'estado_nombre', 'fecha', 'hora']]
+    print(fact_table.columns)
+    fact_table = fact_table[['estados_servicio_id','mensajero_id', 'servicio_id', 'tipo_servicio', 'estado_nombre', 'fecha', 'hora']]
     
 
 
@@ -58,7 +58,7 @@ def entregaPorEstado():
     
 
     result = fact_table.pivot_table(
-        index=['servicio_id', 'tipo_servicio'],  # Agrupar por servicio_id y tipo_servicio
+        index=['servicio_id', 'tipo_servicio','mensajero_id'],  # Agrupar por servicio_id y tipo_servicio
         columns='estado_nombre',               # Usar los valores de estado_nombre como columnas
         values='fecha_id',                         # Usar los valores de hora
         aggfunc='first'                        # En caso de duplicados, tomar el primero
@@ -105,7 +105,7 @@ def entregaPorEstado():
         if pd.isnull(td):  # Si es NaT, devolver un valor predeterminado
             return "NaT"
         else:
-                return f"{td.components.hours:02}:{td.components.minutes:02}:{td.components.seconds:02}"
+                return f"{td.days} days {td.components.hours:02}:{td.components.minutes:02}:{td.components.seconds:02}"
 
     fact_table_copy['tiempo_iniciado_asignado'] = fact_table_copy['tiempo_iniciado_asignado'].apply(format_timedelta)
     fact_table_copy['tiempo_asignado_recogido'] = fact_table_copy['tiempo_asignado_recogido'].apply(format_timedelta)
@@ -113,12 +113,12 @@ def entregaPorEstado():
     fact_table_copy['tiempo_entregado_finalizado'] = fact_table_copy['tiempo_entregado_finalizado'].apply(format_timedelta)
     fact_table_copy=fact_table_copy.drop(columns=['hora_iniciado','hora_asignado','hora_recogido','hora_entregado','hora_finalizado'])
 
-
-    result=result.merge(fact_table_copy, on= 'servicio_id',how='left')
     
+    result=result.merge(fact_table_copy, on= 'servicio_id',how='left')
+    print(result.columns)
 
 
-    result=result[['servicio_id','tipo_servicio','hora_iniciado_id','hora_asignado_id','hora_recogido_id','hora_entregado_id','hora_finalizado_id', 
+    result=result[['servicio_id','tipo_servicio','mensajero_id','hora_iniciado_id','hora_asignado_id','hora_recogido_id','hora_entregado_id','hora_finalizado_id', 
                    'hora_novedad_id','tiempo_iniciado_asignado','tiempo_asignado_recogido','tiempo_recogido_entregado','tiempo_entregado_finalizado']]
 
 
