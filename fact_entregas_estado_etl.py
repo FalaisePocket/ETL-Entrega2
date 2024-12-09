@@ -105,7 +105,7 @@ def entregaPorEstado():
         if pd.isnull(td):  # Si es NaT, devolver un valor predeterminado
             return "NaT"
         else:
-                return f"{td.components.hours:02}:{td.components.minutes:02}:{td.components.seconds:02}"
+                return f"{td.days} days {td.components.hours:02}:{td.components.minutes:02}:{td.components.seconds:02}"
 
     fact_table_copy['tiempo_iniciado_asignado'] = fact_table_copy['tiempo_iniciado_asignado'].apply(format_timedelta)
     fact_table_copy['tiempo_asignado_recogido'] = fact_table_copy['tiempo_asignado_recogido'].apply(format_timedelta)
@@ -113,7 +113,7 @@ def entregaPorEstado():
     fact_table_copy['tiempo_entregado_finalizado'] = fact_table_copy['tiempo_entregado_finalizado'].apply(format_timedelta)
     fact_table_copy=fact_table_copy.drop(columns=['hora_iniciado','hora_asignado','hora_recogido','hora_entregado','hora_finalizado'])
 
-
+    
     result=result.merge(fact_table_copy, on= 'servicio_id',how='left')
     
 
