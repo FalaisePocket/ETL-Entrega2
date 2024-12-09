@@ -1,6 +1,8 @@
 from sqlalchemy import create_engine
 
 def connect_databases():
-    db_op = create_engine('postgresql+psycopg2://alejandro:Alejo1193@localhost/rapidosyfuriosos')
-    db_etl = create_engine('postgresql+psycopg2://alejandro:Alejo1193@localhost/etl')
+    # Configuración de las bases de datos
+    db_op = create_engine('postgresql+psycopg2://Andres:invitado@localhost/PROYECT_DB')
+    db_etl = create_engine('postgresql+psycopg2://Andres:invitado@localhost/etl')
+    
     return db_op, db_etl
