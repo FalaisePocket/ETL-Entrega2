@@ -82,9 +82,48 @@ def entregasPordia():
         # Unir datos
         entregas = entregas.merge(entregas_completadas, on='key_fecha', how='left')
 
-        # Seleccionar columnas necesarias
-        entregas = entregas[['key_servicio', 'key_cliente', 'key_ciudad', 'key_sede', 'key_fecha', 'tiempo_entrega_legible', 'entregas_completadas']]
+        print(f"Tamaño de entregas: {entregas.shape}")
+        ##convertir fechas en llaves foraneas
+        ######insertar fecha y hora en la dimension
+        entregas.rename(columns={'key_fecha':'fecha'}, inplace=True)
+        entregas['fecha'] = pd.to_datetime(entregas['fecha'], errors='coerce')
+        
 
+        fecha_hora=entregas[['fecha']].copy()
+        
+        
+        
+        # Asegurarse de que la columna 'fecha' sea de tipo datetime
+        fecha_hora['fecha'] = pd.to_datetime(fecha_hora['fecha'])
+        
+
+        # Añadir columna 'dia_semana' con el nombre del día
+        fecha_hora['dia_semana'] = fecha_hora['fecha'].dt.day_name()
+        
+
+        # Añadir columna 'mes' con el nombre del mes
+        fecha_hora['mes'] = fecha_hora['fecha'].dt.month_name()
+
+        
+        fecha_hora.to_sql('DimFecha',db_etl,if_exists='append', index=False)
+
+        
+
+        fecha_hora_con_ids = pd.read_sql('SELECT * FROM public."DimFecha"', db_etl)
+        
+        fecha_hora_con_ids=fecha_hora_con_ids.drop(columns=['hora','dia_semana','mes'])
+        
+        fecha_hora_con_ids['fecha'] = pd.to_datetime(fecha_hora_con_ids['fecha'], errors='coerce')
+        fecha_hora_con_ids = fecha_hora_con_ids.drop_duplicates(subset=['fecha'])
+
+        entregas = entregas.merge(fecha_hora_con_ids, on='fecha',how='inner')
+        
+        print(f"Tamaño de entregas: {entregas.shape}")
+
+
+        # Seleccionar columnas necesarias
+        entregas = entregas[['key_servicio', 'key_cliente', 'key_ciudad', 'key_sede', 'fecha_id', 'tiempo_entrega_legible', 'entregas_completadas']]
+        print(f"Tamaño de entregas: {entregas.shape}")
         # Cargar en la base de datos
         entregas.to_sql('FactEntregasPorDia', db_etl, if_exists='replace', index=False)
         print("FactEntregasPorDia cargado correctamente.")

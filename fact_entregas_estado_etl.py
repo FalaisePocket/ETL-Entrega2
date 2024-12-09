@@ -23,6 +23,14 @@ def entregaPorEstado():
 
     fact_table = fact_table[['estados_servicio_id', 'servicio_id', 'tipo_servicio', 'estado_nombre', 'fecha', 'hora']]
     
+
+
+
+    fact_table_copy= fact_table[['servicio_id','estado_nombre','fecha','hora']].copy()
+    fact_table_copy['hora'] = fact_table_copy['hora'].astype(str).str.split('.').str[0]
+    fact_table_copy['fecha_hora'] = pd.to_datetime(fact_table_copy['fecha'].astype(str) + ' ' + fact_table_copy['hora'].astype(str))
+    fact_table_copy=fact_table_copy.drop(columns=['fecha','hora'])
+
     ######insertar fecha y hora en la dimension
     fecha_hora=fact_table[['fecha','hora']].copy()
     # Asegurarse de que la columna 'fecha' sea de tipo datetime
@@ -34,13 +42,19 @@ def entregaPorEstado():
     # Añadir columna 'mes' con el nombre del mes
     fecha_hora['mes'] = fecha_hora['fecha'].dt.month_name()
 
+
     fecha_hora.to_sql('DimFecha',db_etl,if_exists='append', index=False)
+
 
 
     fecha_hora_con_ids = pd.read_sql('SELECT * FROM public."DimFecha"', db_etl)
 
     fact_table= fact_table.merge(fecha_hora_con_ids, on=['fecha','hora'],how='inner')
+
+    
+    #
     fact_table=fact_table.drop(columns=['fecha','hora','dia_semana','mes'])
+    
     
 
     result = fact_table.pivot_table(
@@ -53,25 +67,61 @@ def entregaPorEstado():
     # Renombrar las columnas para mayor claridad
     result.columns.name = None  # Eliminar el nombre del índice de las columnas
     result.rename(columns={
-        'Iniciado': 'hora_iniciado',
-        'Con mensajero Asignado': 'hora_Asignado',
-        'Recogido por mensajero': 'hora_recogido',
-        'Entregado en destino':'hora_entregado',
-        'Terminado completo': 'hora_finalizado'
+        'Iniciado': 'hora_iniciado_id',
+        'Con mensajero Asignado': 'hora_asignado_id',
+        'Recogido por mensajero': 'hora_recogido_id',
+        'Entregado en destino':'hora_entregado_id',
+        'Terminado completo': 'hora_finalizado_id',
+        'Con novedad':'hora_novedad_id'
     }, inplace=True)
     
-    result=result[['servicio_id','tipo_servicio','hora_iniciado','hora_Asignado','hora_recogido','hora_entregado','hora_finalizado', 'Con novedad',]]
-
-    '''
+    fact_table_copy=fact_table_copy.pivot_table(
+        index=['servicio_id'],  # Agrupar por servicio_id y tipo_servicio
+        columns='estado_nombre',               # Usar los valores de estado_nombre como columnas
+        values='fecha_hora',                         # Usar los valores de hora
+        aggfunc='first'                        # En caso de duplicados, tomar el primero
+    ).reset_index()
     
-    #servicio_id, estado_nombre, fecha, hora
-    factablepivot=fact_table.pivot(index='servicio_id', columns='estado_nombre', values='hora')
-    ##id??,servicio_id, mensajero_id,tipo_servicio, cliente_id
-    newtable=fact_table.drop(columns=['id','estado_nombre','fecha','hora']).drop_duplicates(subset=['servicio_id'])
 
-    fact_table = pd.merge(factablepivot, newtable, on='servicio_id')
-    fact_table.reset_index(drop=True, inplace=True)
-'''
+    fact_table_copy.rename(columns={
+        'Iniciado': 'hora_iniciado',
+        'Con mensajero Asignado': 'hora_asignado',
+        'Recogido por mensajero': 'hora_recogido',
+        'Entregado en destino':'hora_entregado',
+        'Terminado completo': 'hora_finalizado',
+        'Con novedad':'hora_novedad'
+    }, inplace=True)
+
+  
+
+    # Calcular las diferencias como timedelta
+    fact_table_copy['tiempo_iniciado_asignado'] = pd.to_datetime(fact_table_copy['hora_asignado'], errors='coerce') - pd.to_datetime(fact_table_copy['hora_iniciado'], errors='coerce')
+    fact_table_copy['tiempo_asignado_recogido'] = pd.to_datetime(fact_table_copy['hora_recogido'], errors='coerce') - pd.to_datetime(fact_table_copy['hora_asignado'], errors='coerce')
+    fact_table_copy['tiempo_recogido_entregado'] = pd.to_datetime(fact_table_copy['hora_entregado'], errors='coerce') - pd.to_datetime(fact_table_copy['hora_recogido'], errors='coerce')
+    fact_table_copy['tiempo_entregado_finalizado'] = pd.to_datetime(fact_table_copy['hora_finalizado'], errors='coerce') - pd.to_datetime(fact_table_copy['hora_entregado'], errors='coerce')
+
+    # Formatear los timedelta, manejando valores NaT
+    def format_timedelta(td):
+        if pd.isnull(td):  # Si es NaT, devolver un valor predeterminado
+            return "NaT"
+        else:
+                return f"{td.components.hours:02}:{td.components.minutes:02}:{td.components.seconds:02}"
+
+    fact_table_copy['tiempo_iniciado_asignado'] = fact_table_copy['tiempo_iniciado_asignado'].apply(format_timedelta)
+    fact_table_copy['tiempo_asignado_recogido'] = fact_table_copy['tiempo_asignado_recogido'].apply(format_timedelta)
+    fact_table_copy['tiempo_recogido_entregado'] = fact_table_copy['tiempo_recogido_entregado'].apply(format_timedelta)
+    fact_table_copy['tiempo_entregado_finalizado'] = fact_table_copy['tiempo_entregado_finalizado'].apply(format_timedelta)
+    fact_table_copy=fact_table_copy.drop(columns=['hora_iniciado','hora_asignado','hora_recogido','hora_entregado','hora_finalizado'])
+
+
+    result=result.merge(fact_table_copy, on= 'servicio_id',how='left')
+    
+
+
+    result=result[['servicio_id','tipo_servicio','hora_iniciado_id','hora_asignado_id','hora_recogido_id','hora_entregado_id','hora_finalizado_id', 
+                   'hora_novedad_id','tiempo_iniciado_asignado','tiempo_asignado_recogido','tiempo_recogido_entregado','tiempo_entregado_finalizado']]
+
+
 
     result.to_sql('FactEntregaEstados', db_etl, if_exists='replace', index=False)
     print("FactEntregaEstados cargado correctamente.")
