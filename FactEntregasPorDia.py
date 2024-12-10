@@ -82,7 +82,7 @@ def entregasPordia():
         # Unir datos
         entregas = entregas.merge(entregas_completadas, on='key_fecha', how='left')
 
-        print(f"Tamaño de entregas: {entregas.shape}")
+        
         ##convertir fechas en llaves foraneas
         ######insertar fecha y hora en la dimension
         entregas.rename(columns={'key_fecha':'fecha'}, inplace=True)
@@ -118,12 +118,12 @@ def entregasPordia():
 
         entregas = entregas.merge(fecha_hora_con_ids, on='fecha',how='inner')
         
-        print(f"Tamaño de entregas: {entregas.shape}")
+        
 
 
         # Seleccionar columnas necesarias
         entregas = entregas[['key_servicio', 'key_cliente', 'key_ciudad', 'key_sede', 'fecha_id', 'tiempo_entrega_legible', 'entregas_completadas']]
-        print(f"Tamaño de entregas: {entregas.shape}")
+        
         # Cargar en la base de datos
         entregas.to_sql('FactEntregasPorDia', db_etl, if_exists='replace', index=False)
         print("FactEntregasPorDia cargado correctamente.")
