@@ -115,10 +115,16 @@ def entregaPorEstado():
 
     
     result=result.merge(fact_table_copy, on= 'servicio_id',how='left')
+    print(result.shape)
+    servicio.rename(columns={'id':'servicio_id'})
+    servicio=servicio[['servicio_id','cliente_id']]
+    result=result.merge(servicio, on='servicio_id',how='left' )
+    print(result.shape)
+    
     print(result.columns)
 
 
-    result=result[['servicio_id','tipo_servicio','mensajero_id','hora_iniciado_id','hora_asignado_id','hora_recogido_id','hora_entregado_id','hora_finalizado_id', 
+    result=result[['servicio_id','tipo_servicio','mensajero_id','cliente_id','hora_iniciado_id','hora_asignado_id','hora_recogido_id','hora_entregado_id','hora_finalizado_id', 
                    'hora_novedad_id','tiempo_iniciado_asignado','tiempo_asignado_recogido','tiempo_recogido_entregado','tiempo_entregado_finalizado']]
 
 
