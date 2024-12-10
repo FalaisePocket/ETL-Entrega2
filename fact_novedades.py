@@ -11,6 +11,6 @@ def novedades():
     tipo_novedad = tipo_novedad.rename(columns={'id': 'tipo_novedad_id', 'nombre': 'tipo_novedad'})
     fact_table = novedades.merge(tipo_novedad, on='tipo_novedad_id', how='left')
 
-    fact_table = fact_table[['id', 'fecha_novedad', 'tipo_novedad', 'descripcion', 'mensajero_id']]
+    fact_table = fact_table[['id', 'tipo_novedad', 'descripcion', 'mensajero_id']]
     fact_table.to_sql('FactNovedades', db_etl, if_exists='replace', index=False)
     print("FactNovedades cargado correctamente.")
