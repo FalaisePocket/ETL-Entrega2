@@ -2,7 +2,9 @@ from cliente import cargar_dim_cliente
 from mensajero import cargar_dim_mensajero
 from sede import cargar_dim_sede
 from ciudad import cargar_dim_ciudad
-from Entregas_Completadas_Por_Dia import entregasPorDia
+from fecha import cargar_dim_fecha
+from FactEntregasPorDia import entregasPordia
+
 from Entregas_Completadas_por_Hora import entregasPorHora
 from fact_entregas_estado_etl import entregaPorEstado
 from fact_novedades import novedades
@@ -12,7 +14,8 @@ def ejecutar_etl():
     cargar_dim_mensajero()
     cargar_dim_sede()
     cargar_dim_ciudad()
-    entregasPorDia()
+    cargar_dim_fecha()
+    entregasPordia()
     entregasPorHora()
     entregaPorEstado()
     novedades()

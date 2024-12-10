@@ -3,7 +3,6 @@ from config import connect_databases
 
 def cargar_dim_mensajero():
     db_op, db_etl = connect_databases()
-    
     query = """
         SELECT
             mensajero.id AS mensajero_id,
@@ -15,4 +14,4 @@ def cargar_dim_mensajero():
     """
     mensajero = pd.read_sql_query(query, db_op)
     mensajero.to_sql('DimMensajero', db_etl, if_exists='replace', index=False)
-    print("DimMensajero cargado correctamente")
+    print("DimMensajero cargado correctamente.")

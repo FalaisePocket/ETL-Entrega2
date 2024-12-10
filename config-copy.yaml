@@ -1,0 +1,16 @@
+
+source:
+  driver: "postgresql"
+  user: "@usuario"
+  password: "@contraseña"
+  host: "localhost"
+  port: 5432
+  db: "@base_de_datos"
+
+destination:
+  driver: "postgresql"
+  user: "@usuario"
+  password: "@contraseña"
+  host: "localhost"
+  port: 5432
+  db: "@base_de_datos" #Editar tus datos acá
